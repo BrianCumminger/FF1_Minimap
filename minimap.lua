@@ -1,3 +1,4 @@
+local VERSION = "5"
 local guiform = nil
 local picbox = nil
 local chkBoundingBox = nil
@@ -192,6 +193,9 @@ function refreshGui()
     --hack to disable drawing before game starts
     if ow_x_px == 0 and ow_y_px == 0 then return end
 
+    --if we moved this much then we're doing the map transition animation
+    if math.abs(ow_y_px - prev_ow_y_px) > 2 then return end
+
     forms.settext(lbl_x, "X: "..ow_x_px)
     forms.settext(lbl_y, "Y: "..ow_y_px)
 
@@ -201,7 +205,7 @@ function refreshGui()
     --mark current screen as seen
     for x = ow_x_px-8, ow_x_px+8 do
         for y = ow_y_px-8, ow_y_px+8 do
-            mapseen[y][x] = true
+            mapseen[clamp(y)][clamp(x)] = true
         end
     end
 
@@ -242,12 +246,13 @@ function refreshGui()
         forms.drawBox(picbox, ow_x - 16, ow_y - 16, ow_x + 16, ow_y + 16, 0xFFFF0000)
     end
 
+    --color cycle for entrances
     hue = hue + 8
     if hue > 360 then hue = 0 end
     local color = hsv_to_rgb32(hue, 0.6, 1)
 
     for _, xy in pairs(warp_coords) do
-        if mapseen[xy[2]][xy[1]] == true then
+        if mapseen[xy[2]][xy[1]] == true or forms.ischecked(chkFogOfWar) == false then
             drawDoublePixel(picbox, xy[1], xy[2], color)
         end
     end
@@ -256,7 +261,6 @@ function refreshGui()
 
     prev_ow_x_px = ow_x_px
     prev_ow_y_px = ow_y_px
-
 end
 
 --returns bytes as array of rows
@@ -313,7 +317,7 @@ end
 function initForms()
     print("initforms")
     memory.usememorydomain("PRG ROM")
-    guiform = forms.newform(513, 560, "Minimap")
+    guiform = forms.newform(513, 560, "Minimap v"..VERSION)
     picbox = forms.pictureBox(guiform, 0, 0, 512, 512)
     chkBoundingBox = forms.checkbox(guiform, "Show Location", 5, 515)
     chkFogOfWar = forms.checkbox(guiform, "Fog of War", 150, 515)
