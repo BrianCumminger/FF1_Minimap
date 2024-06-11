@@ -6,13 +6,14 @@ local lbl_y = nil
 
 local hue = 0
 local mapbytes = {}
-local onetoone = {}
 local warp_coords = {}
 
 local prev_ow_x_px = 0
 local prev_ow_y_px = 0
 local needs_redraw = false
 
+--most of these colors are the average color of the tile (basically what you get if you infinitely blur the tile)
+--only exception are the docks that I set to gray
 TILE_COLORS = {
     [0x00] = 0xFF00AD00, -- GrassTile
     [0x03] = 0xff24a301, -- ForestTopLeft
@@ -90,15 +91,11 @@ TILE_COLORS = {
 
 WARP_TILES = {
     [0x01] = true,[0x02] = true,[0x09] = true,[0x0A] = true,[0x0B] = true,[0x0C] = true,[0x0D] = true,[0x0E] = true,[0x19] = true,[0x1A] = true,
-    [0x1B] = true,[0x1C] = true,[0x1D] = true,[0x1E] = true,[0x29] = true,[0x2A] = true,[0x2B] = true,[0x2F] = true,[0x32] = true,[0x34] = true,[0x35] = true,
-    [0x36] = true,[0x38] = true,[0x39] = true,[0x3A] = true,[0x46] = true,[0x47] = true,[0x48] = true,[0x49] = true,[0x4A] = true,[0x4C] = true,
-    [0x4D] = true,[0x4E] = true,[0x57] = true,[0x58] = true,[0x5A] = true,[0x5D] = true,[0x64] = true,[0x65] = true,[0x66] = true,[0x67] = true,
-    [0x68] = true,[0x69] = true,[0x6A] = true,[0x6C] = true,[0x6D] = true,[0x6E] = true,[0x74] = true,[0x75] = true
+    [0x1B] = true,[0x1C] = true,[0x1D] = true,[0x1E] = true,[0x29] = true,[0x2A] = true,[0x2B] = true,[0x2F] = true,[0x32] = true,[0x34] = true,
+    [0x35] = true,[0x36] = true,[0x38] = true,[0x39] = true,[0x3A] = true,[0x46] = true,[0x47] = true,[0x48] = true,[0x49] = true,[0x4A] = true,
+    [0x4C] = true,[0x4D] = true,[0x4E] = true,[0x57] = true,[0x58] = true,[0x5A] = true,[0x5D] = true,[0x64] = true,[0x65] = true,[0x66] = true,
+    [0x67] = true,[0x68] = true,[0x69] = true,[0x6A] = true,[0x6C] = true,[0x6D] = true,[0x6E] = true,[0x74] = true,[0x75] = true
 }
-
-for x = 0,256 do
-    onetoone[x] = x
-end
 
 function cleanUp()
 	print("Exiting...")
@@ -265,8 +262,7 @@ function decompressMap()
                 --print(string.format("col: %i, tile: %i, run: %i"),col, tile, luarun)
                 --print("col: "..col..", tile: "..tile..", run: "..run)
                 for i = 0,run-1 do
-                    --_maprows[row][col] = tile
-                    _maprows[row][col] = onetoone[tile]
+                    _maprows[row][col] = tile
                     col = col + 1
                 end
                 ptr = ptr + 2
@@ -290,12 +286,14 @@ function initForms()
     lbl_y = forms.label(guiform, "Y: ", 150, 540, 100)
 
     mapbytes = decompressMap()
+    --set any missing tiles to gray
     for x = 0,0x7F do
         if TILE_COLORS[x] == nil then
             TILE_COLORS[x] = 0xFF777777
         end
     end
 
+    --draw map and fill warp_coords with coordinates of entrances
     for x = 0,255 do
         for y = 0,255 do
             if WARP_TILES[mapbytes[y][x]] ~= nil then
@@ -307,10 +305,11 @@ function initForms()
 
     --forms.refresh(picbox)
     forms.refresh(guiform)
-    print("done initforms")
+    print("done initializing minimap script")
 end
 
-print(string.format("Set memory domain to PRG ROM returned: %s",memory.usememorydomain("PRG ROM")))
+--print(string.format("Set memory domain to PRG ROM returned: %s",memory.usememorydomain("PRG ROM")))
+memory.usememorydomain("PRG ROM")
 initForms()
 event.onexit(cleanUp)
 
