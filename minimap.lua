@@ -204,18 +204,17 @@ function refreshGui()
     end
 
     if forms.ischecked(chkBoundingBox) then
-
         --draw bounding box around current location
         forms.drawBox(picbox, ow_x - 16, ow_y - 16, ow_x + 16, ow_y + 16, 0xFFFF0000)
-
-        hue = hue + 8
-        if hue > 360 then hue = 0 end
-        local color = hsv_to_rgb32(hue, 0.6, 1)
-
-        for _, xy in pairs(warp_coords) do
-            drawDoublePixel(picbox, xy[1], xy[2], color)
-        end
         needs_redraw = true
+    end
+
+    hue = hue + 8
+    if hue > 360 then hue = 0 end
+    local color = hsv_to_rgb32(hue, 0.6, 1)
+
+    for _, xy in pairs(warp_coords) do
+        drawDoublePixel(picbox, xy[1], xy[2], color)
     end
 
     forms.refresh(picbox)
