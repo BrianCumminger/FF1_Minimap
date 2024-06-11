@@ -1,16 +1,19 @@
 local guiform = nil
 local picbox = nil
 local chkBoundingBox = nil
+local chkFogOfWar = nil
 local lbl_x = nil
 local lbl_y = nil
 
 local hue = 0
 local mapbytes = {}
+local mapseen = {}
 local warp_coords = {}
 
 local prev_ow_x_px = 0
 local prev_ow_y_px = 0
 local needs_redraw = false
+local entireMapDrawn = false
 
 --most of these colors are the average color of the tile (basically what you get if you infinitely blur the tile)
 --only exception are the docks that I set to gray
@@ -186,27 +189,57 @@ function refreshGui()
     if ow_x_px == nil then ow_x_px = 0 end
     if ow_y_px == nil then ow_y_px = 0 end
 
+    --hack to disable drawing before game starts
+    if ow_x_px == 0 and ow_y_px == 0 then return end
+
     forms.settext(lbl_x, "X: "..ow_x_px)
     forms.settext(lbl_y, "Y: "..ow_y_px)
 
     local ow_x = ow_x_px * 2
     local ow_y = ow_y_px * 2
 
+    --mark current screen as seen
+    for x = ow_x_px-8, ow_x_px+8 do
+        for y = ow_y_px-8, ow_y_px+8 do
+            mapseen[y][x] = true
+        end
+    end
+
     --redraw map under current location
     --todo: this could be optimized to not redraw the inside
-    if needs_redraw == true then
-        for x = prev_ow_x_px - 9,prev_ow_x_px+9 do
-            for y = prev_ow_y_px - 9,prev_ow_y_px+9 do
-                drawDoublePixel(picbox, clamp(x), clamp(y), TILE_COLORS[mapbytes[clamp(y)][clamp(x)]])
+    for x = prev_ow_x_px - 9,prev_ow_x_px+9 do
+        for y = prev_ow_y_px - 9,prev_ow_y_px+9 do
+            drawDoublePixel(picbox, clamp(x), clamp(y), TILE_COLORS[mapbytes[clamp(y)][clamp(x)]])
+        end
+    end
+
+    if forms.ischecked(chkFogOfWar) == false and entireMapDrawn == false then
+        --fog of war disabled, draw entire map
+        for x = 0,255 do
+            for y = 0,255 do
+                drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
             end
         end
-        needs_redraw = false
+        entireMapDrawn = true
+    end
+
+    if forms.ischecked(chkFogOfWar) == true and entireMapDrawn == true then
+        --hide entire map and redraw seen map
+        for x = 0,255 do
+            for y = 0,255 do
+                if mapseen[y][x] == true then
+                    drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
+                else
+                    drawDoublePixel(picbox, x, y, 0xFF000000)
+                end
+            end
+        end
+        entireMapDrawn = false
     end
 
     if forms.ischecked(chkBoundingBox) then
         --draw bounding box around current location
         forms.drawBox(picbox, ow_x - 16, ow_y - 16, ow_x + 16, ow_y + 16, 0xFFFF0000)
-        needs_redraw = true
     end
 
     hue = hue + 8
@@ -214,7 +247,9 @@ function refreshGui()
     local color = hsv_to_rgb32(hue, 0.6, 1)
 
     for _, xy in pairs(warp_coords) do
-        drawDoublePixel(picbox, xy[1], xy[2], color)
+        if mapseen[xy[2]][xy[1]] == true then
+            drawDoublePixel(picbox, xy[1], xy[2], color)
+        end
     end
 
     forms.refresh(picbox)
@@ -277,10 +312,13 @@ end
 
 function initForms()
     print("initforms")
+    memory.usememorydomain("PRG ROM")
     guiform = forms.newform(513, 560, "Minimap")
     picbox = forms.pictureBox(guiform, 0, 0, 512, 512)
     chkBoundingBox = forms.checkbox(guiform, "Show Location", 5, 515)
+    chkFogOfWar = forms.checkbox(guiform, "Fog of War", 150, 515)
     forms.setproperty(chkBoundingBox, "Checked", "true")
+    forms.setproperty(chkFogOfWar, "Checked", "true")
     lbl_x = forms.label(guiform, "X: ", 5, 540, 100)
     lbl_y = forms.label(guiform, "Y: ", 150, 540, 100)
 
@@ -292,18 +330,30 @@ function initForms()
         end
     end
 
+    for y = 0,255 do
+        mapseen[y] = {}
+        for x = 0,255 do
+            mapseen[y][x] = false
+        end
+    end
+
     --draw map and fill warp_coords with coordinates of entrances
     for x = 0,255 do
         for y = 0,255 do
             if WARP_TILES[mapbytes[y][x]] ~= nil then
                 table.insert(warp_coords, {x, y})
             end
-            drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
+            --drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
+            drawDoublePixel(picbox, x, y, 0xFF000000)
         end
     end
 
-    --forms.refresh(picbox)
-    forms.refresh(guiform)
+    forms.refresh(picbox)
+    memory.usememorydomain("RAM")
+
+    prev_ow_x_px = (memory.readbyte(0x0027) + 8)
+    prev_ow_y_px = (memory.readbyte(0x0028) + 8)
+    --forms.refresh(guiform)
     print("done initializing minimap script")
 end
 
