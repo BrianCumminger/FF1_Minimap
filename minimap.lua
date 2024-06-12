@@ -1,5 +1,5 @@
 --------------------------CONFIG--------------------------
-local VERSION = "6"
+local VERSION = "7"
 ----------------------------------------------------------
 
 
@@ -14,13 +14,16 @@ local hue = 0
 local mapbytes = {}
 local mapseen = {}
 local warp_coords = {}
+prev_locs = {}
 
 local prev_ow_x_px = 0
 local prev_ow_y_px = 0
+local prev_render_x = 0
+local prev_render_y = 0
 local needs_redraw = false
 local entireMapDrawn = false
 local restoringFromUserdata = false
-local savecounter = 0
+local framecounter = 0
 
 --most of these colors are the average color of the tile (basically what you get if you infinitely blur the tile)
 --only exception are the docks that I set to gray
@@ -226,11 +229,16 @@ end
 
 
 function refreshGui()
-
+    framecounter = framecounter + 1
     memory.usememorydomain("RAM")
 
     local ow_x_px = (memory.readbyte(0x0027) + 8)
     local ow_y_px = (memory.readbyte(0x0028) + 8)
+
+    for i = 10,2,-1 do
+        prev_locs[i] = prev_locs[i-1]
+    end
+    prev_locs[1] = {ow_x_px, ow_y_px}
 
     if ow_x_px == nil then ow_x_px = 0 end
     if ow_y_px == nil then ow_y_px = 0 end
@@ -239,7 +247,15 @@ function refreshGui()
     if ow_x_px == 0 and ow_y_px == 0 then return end
 
     --if we moved this much then we're doing the map transition animation
-    if math.abs(ow_y_px - prev_ow_y_px) > 2 then return end
+    
+    if math.abs(ow_y_px - prev_ow_y_px) > 1 then
+        --prev_ow_x_px = ow_x_px
+        --prev_ow_y_px = ow_y_px
+        if ow_x_px ~= prev_locs[3][1] or ow_y_px ~= prev_locs[3][2] then
+            return
+        end
+        --return
+    end
 
     forms.settext(lbl_x, "X: "..ow_x_px)
     forms.settext(lbl_y, "Y: "..ow_y_px)
@@ -248,22 +264,22 @@ function refreshGui()
     local ow_y = ow_y_px * 2
 
     --mark current screen as seen
-    for x = ow_x_px-8, ow_x_px+8 do
-        for y = ow_y_px-8, ow_y_px+8 do
+    for x = ow_x_px-9, ow_x_px+9 do
+        for y = ow_y_px-9, ow_y_px+9 do
             mapseen[clamp(y)][clamp(x)] = true
         end
     end
 
-    savecounter = savecounter + 1
-    if savecounter > 600 then
-        savecounter = 0
+    
+    if framecounter > 600 then
+        framecounter = 0
         userdata.set("mapseen", serialize_mapseen())
     end
 
     --redraw map under current location
     --todo: this could be optimized to not redraw the inside
-    for x = prev_ow_x_px - 9,prev_ow_x_px+9 do
-        for y = prev_ow_y_px - 9,prev_ow_y_px+9 do
+    for x = prev_render_x - 9,prev_render_x+9 do
+        for y = prev_render_y - 9,prev_render_y+9 do
             drawDoublePixel(picbox, clamp(x), clamp(y), TILE_COLORS[mapbytes[clamp(y)][clamp(x)]])
         end
     end
@@ -312,6 +328,8 @@ function refreshGui()
 
     prev_ow_x_px = ow_x_px
     prev_ow_y_px = ow_y_px
+    prev_render_x = ow_x_px
+    prev_render_y = ow_y_px
 end
 
 --returns bytes as array of rows
@@ -417,6 +435,10 @@ function initForms()
                 drawDoublePixel(picbox, x, y, 0xFF000000)
             end
         end
+    end
+
+    for i = 1,10 do
+        prev_locs[i] = {i,i}
     end
 
     forms.refresh(picbox)
