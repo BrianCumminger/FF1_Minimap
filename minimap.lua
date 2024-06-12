@@ -1,4 +1,8 @@
-local VERSION = "5"
+--------------------------CONFIG--------------------------
+local VERSION = "6"
+----------------------------------------------------------
+
+
 local guiform = nil
 local picbox = nil
 local chkBoundingBox = nil
@@ -15,6 +19,8 @@ local prev_ow_x_px = 0
 local prev_ow_y_px = 0
 local needs_redraw = false
 local entireMapDrawn = false
+local restoringFromUserdata = false
+local savecounter = 0
 
 --most of these colors are the average color of the tile (basically what you get if you infinitely blur the tile)
 --only exception are the docks that I set to gray
@@ -100,6 +106,45 @@ WARP_TILES = {
     [0x4C] = true,[0x4D] = true,[0x4E] = true,[0x57] = true,[0x58] = true,[0x5A] = true,[0x5D] = true,[0x64] = true,[0x65] = true,[0x66] = true,
     [0x67] = true,[0x68] = true,[0x69] = true,[0x6A] = true,[0x6C] = true,[0x6D] = true,[0x6E] = true,[0x74] = true,[0x75] = true
 }
+
+function tf(b)
+    if b == true then return 't'
+    else return 'f' end
+end
+
+function tfread(c)
+    if c == 't' then return true
+    else return false end
+end
+
+function serialize_mapseen()
+    local outstring = ""
+    local outstrings = {}
+    for i = 0,255 do
+        outstrings[i] = ""
+        for j = 0,255 do
+            local b = false
+            if mapseen[i][j] == true then b = true end
+            outstrings[i] = outstrings[i] .. tf(b)
+        end
+    end
+    for i = 0,255 do
+        outstring = outstring .. outstrings[i]
+    end
+    return outstring
+end
+
+function deserialize_mapseen(s)
+    local intable = {}
+    for i = 0,255 do
+        intable[i] = {}
+        for j = 0,255 do
+            local idx = (i*256)+j+1
+            intable[i][j] = tfread(string.sub(s, idx, idx))
+        end
+    end
+    return intable
+end
 
 function cleanUp()
 	print("Exiting...")
@@ -207,6 +252,12 @@ function refreshGui()
         for y = ow_y_px-8, ow_y_px+8 do
             mapseen[clamp(y)][clamp(x)] = true
         end
+    end
+
+    savecounter = savecounter + 1
+    if savecounter > 600 then
+        savecounter = 0
+        userdata.set("mapseen", serialize_mapseen())
     end
 
     --redraw map under current location
@@ -334,21 +385,37 @@ function initForms()
         end
     end
 
-    for y = 0,255 do
-        mapseen[y] = {}
-        for x = 0,255 do
-            mapseen[y][x] = false
+    --load or initialize fog of war mask
+    local stored_mapseen = userdata.get('mapseen')
+    if stored_mapseen then
+        mapseen = deserialize_mapseen(stored_mapseen)
+        restoringFromUserdata = true
+    else
+        for y = 0,255 do
+            mapseen[y] = {}
+            for x = 0,255 do
+                mapseen[y][x] = false
+            end
         end
     end
+    
 
-    --draw map and fill warp_coords with coordinates of entrances
+    --draw starting canvas and fill warp_coords with coordinates of entrances
     for x = 0,255 do
         for y = 0,255 do
             if WARP_TILES[mapbytes[y][x]] ~= nil then
                 table.insert(warp_coords, {x, y})
             end
-            --drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
-            drawDoublePixel(picbox, x, y, 0xFF000000)
+
+            if restoringFromUserdata then
+                if mapseen[y][x] == true then
+                    drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
+                else
+                    drawDoublePixel(picbox, x, y, 0xFF000000)
+                end
+            else
+                drawDoublePixel(picbox, x, y, 0xFF000000)
+            end
         end
     end
 
@@ -365,6 +432,8 @@ end
 memory.usememorydomain("PRG ROM")
 initForms()
 event.onexit(cleanUp)
+
+--testUserData()
 
 while true do
     refreshGui()
