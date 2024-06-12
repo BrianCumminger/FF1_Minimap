@@ -264,8 +264,8 @@ function refreshGui()
     local ow_y = ow_y_px * 2
 
     --mark current screen as seen
-    for x = ow_x_px-9, ow_x_px+9 do
-        for y = ow_y_px-9, ow_y_px+9 do
+    for x = ow_x_px-8, ow_x_px+8 do
+        for y = ow_y_px-8, ow_y_px+8 do
             mapseen[clamp(y)][clamp(x)] = true
         end
     end
@@ -278,8 +278,8 @@ function refreshGui()
 
     --redraw map under current location
     --todo: this could be optimized to not redraw the inside
-    for x = prev_render_x - 9,prev_render_x+9 do
-        for y = prev_render_y - 9,prev_render_y+9 do
+    for x = prev_render_x - 8,prev_render_x+8 do
+        for y = prev_render_y - 8,prev_render_y+8 do
             drawDoublePixel(picbox, clamp(x), clamp(y), TILE_COLORS[mapbytes[clamp(y)][clamp(x)]])
         end
     end
