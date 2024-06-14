@@ -1,5 +1,5 @@
 --------------------------CONFIG--------------------------
-local VERSION = "7"
+local VERSION = "8"
 ----------------------------------------------------------
 
 
@@ -217,7 +217,7 @@ function hsv_to_rgb32(h, s, v)
     end
 
     local r,g,b = (rp+m)*255, (gp+m)*255, (bp+m)*255
-    local color = 0xFF000000 + bit.rol(r//1, 16) + bit.rol(g//1, 8) + b//1
+    local color = 0xFF000000 + bit.rol(math.floor(r/1), 16) + bit.rol(math.floor(g/1), 8) + math.floor(b/1)
     return color
 end
 
@@ -270,7 +270,6 @@ function refreshGui()
         end
     end
 
-    
     if framecounter > 600 then
         framecounter = 0
         userdata.set("mapseen", serialize_mapseen())
@@ -363,7 +362,7 @@ function decompressMap()
                 col = 255
             elseif curbyte > 0x7F then
                 --print("curbyte > 0x7F")
-                local tile = curbyte & 0x7F
+                local tile = bit.band(curbyte, 0x7F)
                 local run = memory.readbyte(ptr+1)
                 if run == 0 then run = 256 end
                 --print(string.format("col: %i, tile: %i, run: %i"),col, tile, luarun)
@@ -446,6 +445,8 @@ function initForms()
 
     prev_ow_x_px = (memory.readbyte(0x0027) + 8)
     prev_ow_y_px = (memory.readbyte(0x0028) + 8)
+    prev_locs[1][1] = prev_ow_x_px
+    prev_locs[1][2] = prev_ow_y_px
     --forms.refresh(guiform)
     print("done initializing minimap script")
 end
