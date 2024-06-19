@@ -1,5 +1,5 @@
 --------------------------CONFIG--------------------------
-local VERSION = "8"
+local VERSION = "9"
 ----------------------------------------------------------
 
 
@@ -23,10 +23,13 @@ local prev_render_y = 0
 local needs_redraw = false
 local entireMapDrawn = false
 local restoringFromUserdata = false
+local firstDraw = true
 local framecounter = 0
 
 --most of these colors are the average color of the tile (basically what you get if you infinitely blur the tile)
---only exception are the docks that I set to gray
+--only exception are the docks that I set to dark gray
+
+local dock_color = 0xff555555
 TILE_COLORS = {
     [0x00] = 0xFF00AD00, -- GrassTile
     [0x03] = 0xff24a301, -- ForestTopLeft
@@ -35,7 +38,6 @@ TILE_COLORS = {
     [0x06] = 0xff5ac0a4, -- CoastTopLeft
     [0x07] = 0xff78d1fb, -- CoastTop
     [0x08] = 0xff61c3ae, -- CoastTopRight
-    [0x0F] = 0xffbdbdbd, -- DockLeftMid
     [0x10] = 0xff9dbc9d, -- MountainTopLeft
     [0x11] = 0xffc8d0c8, -- MountainTopMid
     [0x12] = 0xff98b398, -- MountainTopRight
@@ -45,7 +47,6 @@ TILE_COLORS = {
     [0x16] = 0xff78d1fb, -- CoastLeft
     [0x17] = 0xff70ceff, -- OceanTile
     [0x18] = 0xff79d1fd, -- CoastRight
-    [0x1F] = 0xffbdbdbd, -- DockRightMid
     [0x20] = 0xffc3cac3, -- MountainMidLeft
     [0x21] = 0xffd6d6d6, -- MountainMid
     [0x22] = 0xffbec2be, -- MountainMidRight
@@ -91,10 +92,14 @@ TILE_COLORS = {
     [0x72] = 0xff16b071, -- MarshBottomLeft
     [0x73] = 0xff16b071, -- MarshBottomRight
     [0x76] = 0xff00ad00, -- solid green
-    [0x77] = 0xffbdbdbd, -- dock
-    [0x78] = 0xffbdbdbd, -- DockBottomMid
-    [0x79] = 0xffbdbdbd, -- dock
-    [0x7A] = 0xffbdbdbd, -- dock
+
+    [0x0F] = dock_color, -- DockLeftMid
+    [0x1F] = dock_color, -- DockRightMid
+    [0x77] = dock_color, -- dock
+    [0x78] = dock_color, -- DockBottomMid
+    [0x79] = dock_color, -- dock
+    [0x7A] = dock_color, -- dock
+
     [0x7B] = 0xffa2a8a2, -- castle foundation
     [0x7C] = 0xffacacac, -- castle foundation
     [0x7D] = 0xffa1a3a1, -- castle foundation
@@ -127,7 +132,7 @@ function Tfread(c)
     else return false end
 end
 
-local function serialize_mapseen()
+function Serialize_mapseen()
     local outstring = ""
     local outstrings = {}
     for i = 0,255 do
@@ -144,7 +149,7 @@ local function serialize_mapseen()
     return outstring
 end
 
-local function deserialize_mapseen(s)
+function Deserialize_mapseen(s)
     local intable = {}
     for i = 0,255 do
         intable[i] = {}
@@ -156,11 +161,27 @@ local function deserialize_mapseen(s)
     return intable
 end
 
+local function printLoc()
+    memory.usememorydomain("RAM")
+    print(string.format("X: %i, Y: %i", memory.readbyte(0x0027), memory.readbyte(0x0028)))
+end
+
 local function cleanUp()
 	print("Exiting...")
 	gui.clearGraphics()
 	gui.clearImageCache()
 	forms.destroyall()
+end
+
+local function safeToRead()
+    memory.usememorydomain("System Bus")
+    --party not created
+    if memory.readbyte(0x6102) == 0 then return false end
+    --in battle
+    if (memory.readbyte(0x60FC) == 0x0B) or (memory.readbyte(0x60FC) == 0x0C) then return false end
+    --can't walk
+    if memory.readbyte(0x42) == 0 or memory.readbyte(0x42) > 8 then return false end
+	return true
 end
 
 local function dump_table(o, depth)
@@ -228,16 +249,21 @@ local function hsv_to_rgb32(h, s, v)
     return color
 end
 
-local function clamp(i)
-    if i < 0 then return 0 end
-    if i > 255 then return 255 end
-    return i
-end
-
-
 local function refreshGui()
     framecounter = framecounter + 1
+    if not safeToRead() then return end
+
     memory.usememorydomain("RAM")
+    if firstDraw then
+        printLoc()
+        prev_ow_x_px = (memory.readbyte(0x0027) + 8)
+        prev_ow_y_px = (memory.readbyte(0x0028) + 8)
+        prev_render_x = prev_ow_x_px
+        prev_render_y = prev_ow_y_px
+        prev_locs[1][1] = prev_ow_x_px
+        prev_locs[1][2] = prev_ow_y_px
+        firstDraw = false
+    end
 
     local ow_x_px = (memory.readbyte(0x0027) + 8)
     local ow_y_px = (memory.readbyte(0x0028) + 8)
@@ -251,16 +277,13 @@ local function refreshGui()
     if ow_y_px == nil then ow_y_px = 0 end
 
     --hack to disable drawing before game starts
-    if ow_x_px == 0 and ow_y_px == 0 then return end
+    if ow_x_px == 8 and ow_y_px == 8 then return end
 
     --if we moved this much then we're doing the map transition animation
     if math.abs(ow_y_px - prev_ow_y_px) > 1 then
-        --prev_ow_x_px = ow_x_px
-        --prev_ow_y_px = ow_y_px
         if ow_x_px ~= prev_locs[3][1] or ow_y_px ~= prev_locs[3][2] then
             return
         end
-        --return
     end
 
     forms.settext(lbl_x, "X: "..ow_x_px)
@@ -272,20 +295,20 @@ local function refreshGui()
     --mark current screen as seen
     for x = ow_x_px-8, ow_x_px+8 do
         for y = ow_y_px-8, ow_y_px+8 do
-            mapseen[clamp(y)][clamp(x)] = true
+            mapseen[y % 256][x % 256] = true
         end
     end
 
     if framecounter > 600 then
         framecounter = 0
-        userdata.set("mapseen", serialize_mapseen())
+        userdata.set("mapseen", Serialize_mapseen())
     end
 
     --redraw map under current location
     --todo: this could be optimized to not redraw the inside
     for x = prev_render_x - 8,prev_render_x+8 do
         for y = prev_render_y - 8,prev_render_y+8 do
-            drawDoublePixel(picbox, clamp(x), clamp(y), TILE_COLORS[mapbytes[clamp(y)][clamp(x)]])
+            drawDoublePixel(picbox, x % 256, y % 256, TILE_COLORS[mapbytes[y % 256][x % 256]])
         end
     end
 
@@ -389,7 +412,6 @@ function DecompressMap()
 end
 
 local function initForms()
-    print("initforms")
     memory.usememorydomain("PRG ROM")
     guiform = forms.newform(513, 560, "Minimap v"..VERSION)
     picbox = forms.pictureBox(guiform, 0, 0, 512, 512)
@@ -411,7 +433,7 @@ local function initForms()
     --load or initialize fog of war mask
     local stored_mapseen = userdata.get('mapseen')
     if stored_mapseen then
-        mapseen = deserialize_mapseen(stored_mapseen)
+        mapseen = Deserialize_mapseen(stored_mapseen)
         restoringFromUserdata = true
     else
         for y = 0,255 do
@@ -421,7 +443,6 @@ local function initForms()
             end
         end
     end
-    
 
     --draw starting canvas and fill warp_coords with coordinates of entrances
     for x = 0,255 do
@@ -442,27 +463,19 @@ local function initForms()
         end
     end
 
+    --fill with dummy data
     for i = 1,10 do
         prev_locs[i] = {i,i}
     end
 
     forms.refresh(picbox)
     memory.usememorydomain("RAM")
-
-    prev_ow_x_px = (memory.readbyte(0x0027) + 8)
-    prev_ow_y_px = (memory.readbyte(0x0028) + 8)
-    prev_locs[1][1] = prev_ow_x_px
-    prev_locs[1][2] = prev_ow_y_px
-    --forms.refresh(guiform)
-    print("done initializing minimap script")
+    print("done initializing Minimap script")
 end
 
---print(string.format("Set memory domain to PRG ROM returned: %s",memory.usememorydomain("PRG ROM")))
 memory.usememorydomain("PRG ROM")
 initForms()
 event.onexit(cleanUp)
-
---testUserData()
 
 while true do
     refreshGui()
