@@ -14,7 +14,7 @@ local hue = 0
 local mapbytes = {}
 local mapseen = {}
 local warp_coords = {}
-prev_locs = {}
+local prev_locs = {}
 
 local prev_ow_x_px = 0
 local prev_ow_y_px = 0
@@ -110,17 +110,24 @@ WARP_TILES = {
     [0x67] = true,[0x68] = true,[0x69] = true,[0x6A] = true,[0x6C] = true,[0x6D] = true,[0x6E] = true,[0x74] = true,[0x75] = true
 }
 
-function tf(b)
+Band = function(op1, op2) end
+if string.sub(_VERSION, -1,-1) == "4" then
+    assert(load("Band = function(op1, op2) return op1 & op2 end"))()
+else
+    assert(loadstring("Band = function(op1, op2) return bit.band(op1, op2) end"))()
+end
+
+function Tf(b)
     if b == true then return 't'
     else return 'f' end
 end
 
-function tfread(c)
+function Tfread(c)
     if c == 't' then return true
     else return false end
 end
 
-function serialize_mapseen()
+local function serialize_mapseen()
     local outstring = ""
     local outstrings = {}
     for i = 0,255 do
@@ -128,7 +135,7 @@ function serialize_mapseen()
         for j = 0,255 do
             local b = false
             if mapseen[i][j] == true then b = true end
-            outstrings[i] = outstrings[i] .. tf(b)
+            outstrings[i] = outstrings[i] .. Tf(b)
         end
     end
     for i = 0,255 do
@@ -137,26 +144,26 @@ function serialize_mapseen()
     return outstring
 end
 
-function deserialize_mapseen(s)
+local function deserialize_mapseen(s)
     local intable = {}
     for i = 0,255 do
         intable[i] = {}
         for j = 0,255 do
             local idx = (i*256)+j+1
-            intable[i][j] = tfread(string.sub(s, idx, idx))
+            intable[i][j] = Tfread(string.sub(s, idx, idx))
         end
     end
     return intable
 end
 
-function cleanUp()
+local function cleanUp()
 	print("Exiting...")
 	gui.clearGraphics()
 	gui.clearImageCache()
 	forms.destroyall()
 end
 
-function dump_table(o, depth)
+local function dump_table(o, depth)
     if depth == nil then
         depth = 0
     end
@@ -176,13 +183,13 @@ function dump_table(o, depth)
     end
 end
 
-function tablelength(T)
+local function tablelength(T)
     local count = 0
     for _ in pairs(T) do count = count + 1 end
     return count
   end
 
-function drawDoublePixel(hwnd, x, y, color)
+local function drawDoublePixel(hwnd, x, y, color)
     x = x * 2
     y = y * 2
     forms.drawPixel(hwnd, x, y, color)
@@ -191,7 +198,7 @@ function drawDoublePixel(hwnd, x, y, color)
     forms.drawPixel(hwnd, x+1, y+1, color)
 end
 
-function hsv_to_rgb32(h, s, v)
+local function hsv_to_rgb32(h, s, v)
     local c = v * s
     local x = c * (1 - math.abs(((h/60) % 2) - 1))
     local m = v - c
@@ -221,14 +228,14 @@ function hsv_to_rgb32(h, s, v)
     return color
 end
 
-function clamp(i)
+local function clamp(i)
     if i < 0 then return 0 end
     if i > 255 then return 255 end
     return i
 end
 
 
-function refreshGui()
+local function refreshGui()
     framecounter = framecounter + 1
     memory.usememorydomain("RAM")
 
@@ -247,7 +254,6 @@ function refreshGui()
     if ow_x_px == 0 and ow_y_px == 0 then return end
 
     --if we moved this much then we're doing the map transition animation
-    
     if math.abs(ow_y_px - prev_ow_y_px) > 1 then
         --prev_ow_x_px = ow_x_px
         --prev_ow_y_px = ow_y_px
@@ -332,7 +338,7 @@ function refreshGui()
 end
 
 --returns bytes as array of rows
-function decompressMap()
+function DecompressMap()
     local _maprows = {}
     for x = 0,255 do
         _maprows[x] = {}
@@ -362,7 +368,7 @@ function decompressMap()
                 col = 255
             elseif curbyte > 0x7F then
                 --print("curbyte > 0x7F")
-                local tile = bit.band(curbyte, 0x7F)
+                local tile = Band(curbyte, 0x7F)
                 local run = memory.readbyte(ptr+1)
                 if run == 0 then run = 256 end
                 --print(string.format("col: %i, tile: %i, run: %i"),col, tile, luarun)
@@ -382,7 +388,7 @@ function decompressMap()
     return _maprows
 end
 
-function initForms()
+local function initForms()
     print("initforms")
     memory.usememorydomain("PRG ROM")
     guiform = forms.newform(513, 560, "Minimap v"..VERSION)
@@ -394,7 +400,7 @@ function initForms()
     lbl_x = forms.label(guiform, "X: ", 5, 540, 100)
     lbl_y = forms.label(guiform, "Y: ", 150, 540, 100)
 
-    mapbytes = decompressMap()
+    mapbytes = DecompressMap()
     --set any missing tiles to gray
     for x = 0,0x7F do
         if TILE_COLORS[x] == nil then
