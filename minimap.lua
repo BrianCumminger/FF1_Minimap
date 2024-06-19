@@ -16,8 +16,6 @@ local mapseen = {}
 local warp_coords = {}
 local prev_locs = {}
 
-local prev_ow_x_px = 0
-local prev_ow_y_px = 0
 local prev_render_x = 0
 local prev_render_y = 0
 local needs_redraw = false
@@ -179,7 +177,7 @@ local function safeToRead()
     if memory.readbyte(0x6102) == 0 then return false end
     --in battle
     if (memory.readbyte(0x60FC) == 0x0B) or (memory.readbyte(0x60FC) == 0x0C) then return false end
-    --can't walk
+    --can't walk (another not on map check)
     if memory.readbyte(0x42) == 0 or memory.readbyte(0x42) > 8 then return false end
 	return true
 end
@@ -256,12 +254,10 @@ local function refreshGui()
     memory.usememorydomain("RAM")
     if firstDraw then
         printLoc()
-        prev_ow_x_px = (memory.readbyte(0x0027) + 8)
-        prev_ow_y_px = (memory.readbyte(0x0028) + 8)
-        prev_render_x = prev_ow_x_px
-        prev_render_y = prev_ow_y_px
-        prev_locs[1][1] = prev_ow_x_px
-        prev_locs[1][2] = prev_ow_y_px
+        prev_render_x = (memory.readbyte(0x0027) + 8)
+        prev_render_y = (memory.readbyte(0x0028) + 8)
+        prev_locs[1][1] = prev_render_x
+        prev_locs[1][2] = prev_render_y
         firstDraw = false
     end
 
@@ -276,14 +272,10 @@ local function refreshGui()
     if ow_x_px == nil then ow_x_px = 0 end
     if ow_y_px == nil then ow_y_px = 0 end
 
-    --hack to disable drawing before game starts
-    if ow_x_px == 8 and ow_y_px == 8 then return end
-
-    --if we moved this much then we're doing the map transition animation
-    if math.abs(ow_y_px - prev_ow_y_px) > 1 then
-        if ow_x_px ~= prev_locs[3][1] or ow_y_px ~= prev_locs[3][2] then
-            return
-        end
+    --if we stayed in the same place for a few frames then it's safe to draw
+    --otherwise we're in a transition animation
+    if ow_x_px ~= prev_locs[3][1] or ow_y_px ~= prev_locs[3][2] then
+        return
     end
 
     forms.settext(lbl_x, "X: "..ow_x_px)
@@ -338,7 +330,13 @@ local function refreshGui()
 
     if forms.ischecked(chkBoundingBox) then
         --draw bounding box around current location
-        forms.drawBox(picbox, ow_x - 16, ow_y - 16, ow_x + 16, ow_y + 16, 0xFFFF0000)
+        for x = ow_x-16, ow_x+16 do
+            for y = ow_y-16, ow_y+16 do
+                if x == ow_x-16 or x == ow_x+16 or y == ow_y-16 or y == ow_y+16 then
+                    forms.drawPixel(picbox, x%512, y%512, 0xFFFF0000)
+                end
+            end
+        end
     end
 
     --color cycle for entrances
@@ -354,8 +352,6 @@ local function refreshGui()
 
     forms.refresh(picbox)
 
-    prev_ow_x_px = ow_x_px
-    prev_ow_y_px = ow_y_px
     prev_render_x = ow_x_px
     prev_render_y = ow_y_px
 end
