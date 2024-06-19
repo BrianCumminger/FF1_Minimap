@@ -1,5 +1,7 @@
 --------------------------CONFIG--------------------------
-local VERSION = "9"
+local VERSION = "10"
+local SHOW_VEHICLES = true --show vehicles when found
+local VEHICLE_COLOR = 0xFFFF4400 --ARGB
 ----------------------------------------------------------
 
 
@@ -18,6 +20,10 @@ local prev_locs = {}
 
 local prev_render_x = 0
 local prev_render_y = 0
+local prev_ship_x = nil
+local prev_ship_y = nil
+local prev_airship_x = nil
+local prev_airship_y = nil
 local needs_redraw = false
 local entireMapDrawn = false
 local restoringFromUserdata = false
@@ -216,6 +222,9 @@ local function drawDoublePixel(hwnd, x, y, color)
     forms.drawPixel(hwnd, x, y+1, color)
     forms.drawPixel(hwnd, x+1, y+1, color)
 end
+local function drawMapPixel(x, y)
+    drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y % 256][x % 256]])
+end
 
 local function hsv_to_rgb32(h, s, v)
     local c = v * s
@@ -300,7 +309,7 @@ local function refreshGui()
     --todo: this could be optimized to not redraw the inside
     for x = prev_render_x - 8,prev_render_x+8 do
         for y = prev_render_y - 8,prev_render_y+8 do
-            drawDoublePixel(picbox, x % 256, y % 256, TILE_COLORS[mapbytes[y % 256][x % 256]])
+            drawMapPixel(x % 256, y % 256)
         end
     end
 
@@ -308,7 +317,7 @@ local function refreshGui()
         --fog of war disabled, draw entire map
         for x = 0,255 do
             for y = 0,255 do
-                drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
+                drawMapPixel(x, y)
             end
         end
         entireMapDrawn = true
@@ -319,13 +328,50 @@ local function refreshGui()
         for x = 0,255 do
             for y = 0,255 do
                 if mapseen[y][x] == true then
-                    drawDoublePixel(picbox, x, y, TILE_COLORS[mapbytes[y][x]])
+                    drawMapPixel(x, y)
                 else
                     drawDoublePixel(picbox, x, y, 0xFF000000)
                 end
             end
         end
         entireMapDrawn = false
+    end
+
+    if SHOW_VEHICLES then
+        memory.usememorydomain("System Bus")
+        --ship
+        if Band(memory.readbyte(0x6000), 1) == 1 then
+            local ship_x = memory.readbyte(0x6001)
+            local ship_y = memory.readbyte(0x6002)
+            if prev_ship_x ~= nil then
+                drawMapPixel(prev_ship_x, prev_ship_y)
+                drawMapPixel(prev_ship_x+1, prev_ship_y)
+                drawMapPixel(prev_ship_x, prev_ship_y+1)
+                drawMapPixel(prev_ship_x+1, prev_ship_y+1)
+            end
+            drawDoublePixel(picbox, ship_x, ship_y, VEHICLE_COLOR)
+            drawDoublePixel(picbox, ship_x+1, ship_y, VEHICLE_COLOR)
+            drawDoublePixel(picbox, ship_x, ship_y+1, VEHICLE_COLOR)
+            drawDoublePixel(picbox, ship_x+1, ship_y+1, VEHICLE_COLOR)
+            prev_ship_x = ship_x
+            prev_ship_y = ship_y
+        end
+        if Band(memory.readbyte(0x6004), 1) == 1 then
+            local airship_x = memory.readbyte(0x6005)
+            local airship_y = memory.readbyte(0x6006)
+            if prev_airship_x ~= nil then
+                drawMapPixel(prev_airship_x, prev_airship_y)
+                drawMapPixel(prev_airship_x+1, prev_airship_y)
+                drawMapPixel(prev_airship_x, prev_airship_y+1)
+                drawMapPixel(prev_airship_x+1, prev_airship_y+1)
+            end
+            drawDoublePixel(picbox, airship_x, airship_y, VEHICLE_COLOR)
+            drawDoublePixel(picbox, airship_x+1, airship_y, VEHICLE_COLOR)
+            drawDoublePixel(picbox, airship_x, airship_y+1, VEHICLE_COLOR)
+            drawDoublePixel(picbox, airship_x+1, airship_y+1, VEHICLE_COLOR)
+            prev_airship_x = airship_x
+            prev_airship_y = airship_y
+        end
     end
 
     if forms.ischecked(chkBoundingBox) then
