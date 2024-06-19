@@ -182,7 +182,7 @@ local function safeToRead()
     --party not created
     if memory.readbyte(0x6102) == 0 then return false end
     --in battle
-    if (memory.readbyte(0x60FC) == 0x0B) or (memory.readbyte(0x60FC) == 0x0C) then return false end
+    --if (memory.readbyte(0x60FC) == 0x0B) or (memory.readbyte(0x60FC) == 0x0C) then return false end
     --can't walk (another not on map check)
     if memory.readbyte(0x42) == 0 or memory.readbyte(0x42) > 8 then return false end
 	return true
@@ -386,7 +386,7 @@ local function refreshGui()
     end
 
     --color cycle for entrances
-    hue = hue + 8
+    hue = hue + 5
     if hue > 360 then hue = 0 end
     local color = hsv_to_rgb32(hue, 0.6, 1)
 
